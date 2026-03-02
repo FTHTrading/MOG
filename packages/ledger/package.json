@@ -1,0 +1,19 @@
+{
+  "name": "@sovereign/ledger",
+  "version": "0.1.0",
+  "description": "Sovereign Ledger — Single capital spine (XRPL, settlement, mint/burn, reconciliation)",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@sovereign/identity": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

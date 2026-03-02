@@ -1,0 +1,20 @@
+{
+  "name": "@sovereign/compliance",
+  "version": "0.1.0",
+  "description": "Sovereign Compliance — Unified compliance gate (YAML rules + Howey + guardrails)",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@sovereign/identity": "*",
+    "@sovereign/ledger": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

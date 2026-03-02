@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --foreground: 210 40% 98%;
+    --background: 222 47% 11%;
+    --card: 217 33% 17%;
+    --card-border: 215 25% 27%;
+    --muted: 215 20% 45%;
+    --accent-gold: 43 65% 51%;
+  }
+
+  body {
+    @apply bg-sovereign-950 text-sovereign-100 antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-sovereign-700/50 bg-sovereign-900/80 p-6 backdrop-blur-sm;
+  }
+
+  .card-header {
+    @apply mb-4 flex items-center justify-between border-b border-sovereign-700/30 pb-3;
+  }
+
+  .stat-value {
+    @apply font-mono text-3xl font-bold text-sovereign-50;
+  }
+
+  .stat-label {
+    @apply text-sm font-medium uppercase tracking-wider text-sovereign-400;
+  }
+
+  .status-dot {
+    @apply inline-block h-2 w-2 rounded-full;
+  }
+
+  .status-dot-healthy {
+    @apply status-dot bg-accent-green;
+  }
+
+  .status-dot-degraded {
+    @apply status-dot bg-accent-amber;
+  }
+
+  .status-dot-offline {
+    @apply status-dot bg-accent-red;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sovereign-300 transition-colors hover:bg-sovereign-800 hover:text-sovereign-100;
+  }
+
+  .nav-link-active {
+    @apply nav-link bg-sovereign-800/80 text-gold-400;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+
+  .badge-green {
+    @apply badge bg-accent-green/10 text-accent-green;
+  }
+
+  .badge-red {
+    @apply badge bg-accent-red/10 text-accent-red;
+  }
+
+  .badge-amber {
+    @apply badge bg-accent-amber/10 text-accent-amber;
+  }
+
+  .badge-blue {
+    @apply badge bg-accent-blue/10 text-accent-blue;
+  }
+
+  .table-header {
+    @apply border-b border-sovereign-700/50 bg-sovereign-900/50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-sovereign-400;
+  }
+
+  .table-cell {
+    @apply border-b border-sovereign-800/50 px-4 py-3 text-sm text-sovereign-200;
+  }
+}

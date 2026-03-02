@@ -1,0 +1,29 @@
+{
+  "name": "sovereign-spine",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Sovereign Spine — Converged institutional capital infrastructure",
+  "author": "Men of God Development & Investments LLC",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "type-check": "turbo type-check",
+    "clean": "turbo clean",
+    "control-plane": "turbo dev --filter=sovereign-control-plane"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "npm@10.0.0"
+}
