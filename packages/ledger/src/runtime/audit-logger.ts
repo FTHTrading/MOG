@@ -1,11 +1,11 @@
 /**
- * @sovereign/ledger — Hash-Chained Audit Logger (LIVE)
+ * @sovereign/ledger — Hash-Chained Audit Logger (LIVE + DURABLE)
  *
  * Real implementation of AuditLogger from @sovereign/identity.
  * Every entry is hash-chained using SHA-256.
  * Breaking any link invalidates the downstream chain.
  *
- * Storage: In-memory for v1 (PostgreSQL adapter in Phase D).
+ * Storage: Optional DurableStore for persistence across restarts.
  * Anchoring: Optional — can anchor batches to XRPL.
  */
 
@@ -18,12 +18,35 @@ import type {
   AuditQueryFilters,
   AuditBundle,
 } from '@sovereign/identity';
+import type { DurableStore } from './store';
+import { STORE_COLLECTIONS, STORE_SNAPSHOTS } from './store';
 
 // ─── Audit Logger Implementation ───────────────────────────────────────────────
 
 export class SovereignAuditLogger implements AuditLogger {
   private entries: AuditLogEntry[] = [];
   private lastHash: string = '0'.repeat(64); // genesis hash
+  private store: DurableStore | null = null;
+
+  constructor(store?: DurableStore) {
+    this.store = store ?? null;
+  }
+
+  /**
+   * Restore state from durable store. Call once before any operations.
+   */
+  async restore(): Promise<number> {
+    if (!this.store) return 0;
+
+    const entries = await this.store.loadAll(STORE_COLLECTIONS.AUDIT_ENTRIES) as AuditLogEntry[];
+    if (entries.length === 0) return 0;
+
+    this.entries = entries;
+    this.lastHash = entries[entries.length - 1].contentHash;
+
+    console.error(`[AUDIT] Restored ${entries.length} entries, head: ${this.lastHash.substring(0, 12)}...`);
+    return entries.length;
+  }
 
   /**
    * Log an audit event. Returns the hash-chained entry.
@@ -68,6 +91,17 @@ export class SovereignAuditLogger implements AuditLogger {
 
     this.entries.push(entry);
     this.lastHash = contentHash;
+
+    // Persist
+    if (this.store) {
+      await this.store.append(STORE_COLLECTIONS.AUDIT_ENTRIES, [entry]);
+      await this.store.saveSnapshot(STORE_SNAPSHOTS.AUDIT_CHAIN_HEAD, {
+        lastHash: this.lastHash,
+        entryCount: this.entries.length,
+        lastEntryId: entry.id,
+        timestamp: entry.timestamp,
+      });
+    }
 
     return entry;
   }

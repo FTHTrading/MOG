@@ -4,7 +4,7 @@
  * Full implementation of the SovereignLedger interface.
  * Hash-chained, double-entry, 28-decimal precision.
  *
- * Storage: In-memory for v1 (PostgreSQL adapter in Phase D).
+ * Storage: LIVE + DURABLE (JSONL append-only + JSON snapshots via FileStore).
  *
  * Integrations:
  *   - Audit logger: Every mutation emits an audit entry
@@ -31,6 +31,8 @@ import type { SovereignLedger, LedgerQueryFilters, LedgerStats, ChainStats } fro
 import type { SovereignAuditLogger } from './audit-logger';
 import type { GuardrailEngine } from './guardrail-engine';
 import type { XrplAnchorEngine } from '../xrpl/anchor-engine';
+import type { DurableStore } from './store';
+import { STORE_COLLECTIONS, STORE_SNAPSHOTS } from './store';
 import { AuditAction, Role, ModuleCategory } from '@sovereign/identity';
 
 // ─── Implementation ────────────────────────────────────────────────────────────
@@ -43,18 +45,56 @@ export class SovereignLedgerImpl implements SovereignLedger {
   private auditLogger: SovereignAuditLogger;
   private guardrailEngine: GuardrailEngine;
   private anchorEngine: XrplAnchorEngine | null;
+  private store: DurableStore | null;
 
   constructor(
     auditLogger: SovereignAuditLogger,
     guardrailEngine: GuardrailEngine,
     anchorEngine?: XrplAnchorEngine,
+    store?: DurableStore,
   ) {
     this.auditLogger = auditLogger;
     this.guardrailEngine = guardrailEngine;
     this.anchorEngine = anchorEngine ?? null;
+    this.store = store ?? null;
 
     // Seed system accounts
     this.seedSystemAccounts();
+  }
+
+  /**
+   * Restore state from durable store. Call once before any operations.
+   */
+  async restore(): Promise<number> {
+    if (!this.store) return 0;
+
+    // Restore ledger entries
+    const entries = await this.store.loadAll(STORE_COLLECTIONS.LEDGER_ENTRIES) as LedgerEntry[];
+    if (entries.length > 0) {
+      this.entries = entries;
+      this.lastHash = entries[entries.length - 1].contentHash;
+    }
+
+    // Restore accounts
+    const accountsData = await this.store.loadSnapshot(STORE_SNAPSHOTS.ACCOUNTS) as Record<string, CapitalAccount> | null;
+    if (accountsData) {
+      this.accounts = new Map(Object.entries(accountsData));
+    }
+
+    console.error(`[LEDGER] Restored ${entries.length} entries, ${this.accounts.size} accounts`);
+    return entries.length;
+  }
+
+  /**
+   * Persist accounts to store.
+   */
+  private async persistAccounts(): Promise<void> {
+    if (!this.store) return;
+    const obj: Record<string, CapitalAccount> = {};
+    for (const [k, v] of this.accounts.entries()) {
+      obj[k] = v;
+    }
+    await this.store.saveSnapshot(STORE_SNAPSHOTS.ACCOUNTS, obj);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -498,6 +538,12 @@ export class SovereignLedgerImpl implements SovereignLedger {
     this.entries.push(entry);
     this.lastHash = contentHash;
 
+    // Persist entry + chain head
+    if (this.store) {
+      this.store.append(STORE_COLLECTIONS.LEDGER_ENTRIES, [entry]).catch(() => {});
+      this.store.saveSnapshot(STORE_SNAPSHOTS.LEDGER_CHAIN_HEAD, { lastHash: this.lastHash }).catch(() => {});
+    }
+
     return entry;
   }
 
@@ -508,6 +554,7 @@ export class SovereignLedgerImpl implements SovereignLedger {
       account.balance = newBalance.toFixed(2);
       account.availableBalance = newBalance.toFixed(2);
       account.updatedAt = new Date().toISOString();
+      this.persistAccounts().catch(() => {});
     }
   }
 
@@ -518,6 +565,7 @@ export class SovereignLedgerImpl implements SovereignLedger {
       account.balance = newBalance.toFixed(2);
       account.availableBalance = newBalance.toFixed(2);
       account.updatedAt = new Date().toISOString();
+      this.persistAccounts().catch(() => {});
     }
   }
 

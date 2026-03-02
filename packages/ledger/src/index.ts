@@ -88,3 +88,8 @@ export { SovereignAuditLogger } from './runtime/audit-logger';
 export { GuardrailEngine } from './runtime/guardrail-engine';
 export type { GuardrailConfig } from './runtime/guardrail-engine';
 export { SovereignLedgerImpl } from './runtime/sovereign-ledger-impl';
+
+// Durable storage
+export { FileStore } from './runtime/file-store';
+export { STORE_COLLECTIONS, STORE_SNAPSHOTS } from './runtime/store';
+export type { DurableStore, StoreInfo } from './runtime/store';

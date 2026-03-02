@@ -1,15 +1,16 @@
 /**
- * Sovereign Capital Engine — Singleton
+ * Sovereign Capital Engine — Singleton (DURABLE)
  *
  * This is the live engine that powers the control plane.
- * It initializes the full stack:
+ * It initializes the full stack with persistent storage:
+ *   0. FileStore → JSONL append-only + JSON snapshots
  *   1. XRPL Connection Manager → testnet
- *   2. XRPL Anchor Engine → hash anchoring
- *   3. Hash-Chained Audit Logger
- *   4. Guardrail Engine
- *   5. Sovereign Ledger (full implementation)
+ *   2. XRPL Anchor Engine → hash anchoring (persisted)
+ *   3. Hash-Chained Audit Logger (persisted)
+ *   4. Guardrail Engine (persisted)
+ *   5. Sovereign Ledger (persisted)
  *
- * The engine is initialized once and shared across all API routes.
+ * All state survives restarts via .sovereign-data/ directory.
  */
 
 import {
@@ -20,9 +21,10 @@ import {
   SovereignLedgerImpl,
   XrplNetwork,
   AnchoringTier,
+  FileStore,
 } from '@sovereign/ledger';
 import { AuditAction, Role, ModuleCategory } from '@sovereign/identity';
-import type { GuardrailConfig } from '@sovereign/ledger';
+import type { GuardrailConfig, DurableStore } from '@sovereign/ledger';
 
 // ─── Engine State ──────────────────────────────────────────────────────────────
 
@@ -47,6 +49,7 @@ class SovereignEngine {
   private _auditLogger: SovereignAuditLogger | null = null;
   private _guardrailEngine: GuardrailEngine | null = null;
   private _ledger: SovereignLedgerImpl | null = null;
+  private _store: DurableStore | null = null;
   private _initialized = false;
   private _startTime = 0;
 
@@ -66,25 +69,39 @@ class SovereignEngine {
     xrplSeed?: string;
     guardrails?: Partial<GuardrailConfig>;
     skipXrpl?: boolean;
+    dataDir?: string;
   }): Promise<void> {
     if (this._initialized) return;
 
     const network = config?.network ?? ('testnet' as XrplNetwork);
     this._startTime = Date.now();
 
-    // 1. Audit Logger (no deps)
-    this._auditLogger = new SovereignAuditLogger();
+    // 0. Durable Store (JSONL + JSON snapshots)
+    const dataDir = config?.dataDir ?? '.sovereign-data';
+    this._store = new FileStore(dataDir);
+    await this._store.initialize();
 
-    // 2. Guardrail Engine (no deps)
-    this._guardrailEngine = new GuardrailEngine(config?.guardrails);
+    // 1. Audit Logger (with persistence)
+    this._auditLogger = new SovereignAuditLogger(this._store);
+
+    // 2. Guardrail Engine (with persistence)
+    this._guardrailEngine = new GuardrailEngine(config?.guardrails, this._store);
 
     // 3. XRPL Connection Manager
     this._connectionManager = new SovereignXrplConnectionManager(network);
 
-    // 4. XRPL Anchor Engine
-    this._anchorEngine = new XrplAnchorEngine(this._connectionManager);
+    // 4. XRPL Anchor Engine (with persistence)
+    this._anchorEngine = new XrplAnchorEngine(this._connectionManager, this._store);
 
-    // 5. Connect to XRPL + fund wallet (if not skipping)
+    // 5. Restore persisted state BEFORE connecting
+    const [auditCount, guardrailMsg, anchorCount] = await Promise.all([
+      this._auditLogger.restore(),
+      this._guardrailEngine.restore().then(() => 'ok'),
+      this._anchorEngine.restore(),
+    ]);
+    console.error(`[ENGINE] State restored — audit:${auditCount} anchors:${anchorCount}`);
+
+    // 6. Connect to XRPL + fund wallet (if not skipping)
     if (!config?.skipXrpl) {
       try {
         await this._connectionManager.connect();
@@ -107,18 +124,23 @@ class SovereignEngine {
       }
     }
 
-    // 6. Sovereign Ledger (depends on audit + guardrails + anchor)
+    // 7. Sovereign Ledger (depends on audit + guardrails + anchor + store)
     this._ledger = new SovereignLedgerImpl(
       this._auditLogger,
       this._guardrailEngine,
       this._anchorEngine,
+      this._store,
     );
 
-    // Seed a demo client account
-    this._ledger.createAccount('CLIENT-001', 'kevan-burns');
-
-    // Set initial reserves ($10M)
-    this._guardrailEngine.recordReserve(10_000_000);
+    // 8. Restore ledger state
+    const ledgerCount = await this._ledger.restore();
+    
+    // Only seed demo account if no persisted accounts
+    if (ledgerCount === 0) {
+      this._ledger.createAccount('CLIENT-001', 'kevan-burns');
+      // Set initial reserves ($10M)
+      this._guardrailEngine.recordReserve(10_000_000);
+    }
 
     this._initialized = true;
     console.error('[ENGINE] Sovereign Capital Engine initialized');

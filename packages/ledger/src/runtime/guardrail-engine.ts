@@ -16,6 +16,8 @@
 
 import { GuardrailType } from '../types';
 import type { GuardrailCheck, GuardrailResult } from '../types';
+import type { DurableStore } from './store';
+import { STORE_COLLECTIONS, STORE_SNAPSHOTS } from './store';
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 
@@ -49,9 +51,60 @@ export class GuardrailEngine {
   private totalMinted: number = 0;
   private totalReserves: number = 0;
   private results: GuardrailResult[] = [];
+  private store: DurableStore | null;
 
-  constructor(config?: Partial<GuardrailConfig>) {
+  constructor(config?: Partial<GuardrailConfig>, store?: DurableStore) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.store = store ?? null;
+  }
+
+  /**
+   * Restore state from durable store. Call once before operations.
+   */
+  async restore(): Promise<void> {
+    if (!this.store) return;
+
+    // Restore guardrail results
+    const results = await this.store.loadAll(STORE_COLLECTIONS.GUARDRAIL_RESULTS) as GuardrailResult[];
+    if (results.length > 0) {
+      this.results = results;
+    }
+
+    // Restore mutable state
+    const state = await this.store.loadSnapshot(STORE_SNAPSHOTS.GUARDRAIL_STATE) as {
+      frozenAccounts: string[];
+      dailyMintTotal: number;
+      dailyMintResetAt: number;
+      recentRedemptionIds: string[];
+      totalMinted: number;
+      totalReserves: number;
+    } | null;
+
+    if (state) {
+      this.frozenAccounts = new Set(state.frozenAccounts);
+      this.dailyMintTotal = state.dailyMintTotal;
+      this.dailyMintResetAt = state.dailyMintResetAt;
+      this.recentRedemptionIds = new Set(state.recentRedemptionIds);
+      this.totalMinted = state.totalMinted;
+      this.totalReserves = state.totalReserves;
+    }
+
+    console.error(`[GUARDRAILS] Restored ${results.length} results, ${this.frozenAccounts.size} frozen accounts`);
+  }
+
+  /**
+   * Persist mutable guardrail state to store.
+   */
+  private async persistState(): Promise<void> {
+    if (!this.store) return;
+    await this.store.saveSnapshot(STORE_SNAPSHOTS.GUARDRAIL_STATE, {
+      frozenAccounts: [...this.frozenAccounts],
+      dailyMintTotal: this.dailyMintTotal,
+      dailyMintResetAt: this.dailyMintResetAt,
+      recentRedemptionIds: [...this.recentRedemptionIds],
+      totalMinted: this.totalMinted,
+      totalReserves: this.totalReserves,
+    });
   }
 
   /**
@@ -94,6 +147,12 @@ export class GuardrailEngine {
     }
 
     this.results.push(result);
+
+    // Persist result
+    if (this.store) {
+      this.store.append(STORE_COLLECTIONS.GUARDRAIL_RESULTS, [result]).catch(() => {});
+    }
+
     return result;
   }
 
@@ -101,24 +160,29 @@ export class GuardrailEngine {
 
   freezeAccount(accountId: string): void {
     this.frozenAccounts.add(accountId);
+    this.persistState().catch(() => {});
   }
 
   unfreezeAccount(accountId: string): void {
     this.frozenAccounts.delete(accountId);
+    this.persistState().catch(() => {});
   }
 
   recordMint(amountUsd: number): void {
     this.resetDailyIfNeeded();
     this.dailyMintTotal += amountUsd;
     this.totalMinted += amountUsd;
+    this.persistState().catch(() => {});
   }
 
   recordReserve(amountUsd: number): void {
     this.totalReserves = amountUsd;
+    this.persistState().catch(() => {});
   }
 
   recordRedemptionId(redemptionId: string): void {
     this.recentRedemptionIds.add(redemptionId);
+    this.persistState().catch(() => {});
   }
 
   recordOperation(): void {

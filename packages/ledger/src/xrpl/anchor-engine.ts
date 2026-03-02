@@ -18,6 +18,8 @@ import { Wallet, xrpToDrops } from 'xrpl';
 import type { Payment } from 'xrpl';
 import type { SovereignXrplConnectionManager } from './connection-manager';
 import type { AnchorSubmission, AnchorReceipt } from './types';
+import type { DurableStore } from '../runtime/store';
+import { STORE_COLLECTIONS } from '../runtime/store';
 
 // ─── Anchor Engine ─────────────────────────────────────────────────────────────
 
@@ -25,9 +27,24 @@ export class XrplAnchorEngine {
   private connectionManager: SovereignXrplConnectionManager;
   private wallet: Wallet | null = null;
   private anchorHistory: AnchorReceipt[] = [];
+  private store: DurableStore | null;
 
-  constructor(connectionManager: SovereignXrplConnectionManager) {
+  constructor(connectionManager: SovereignXrplConnectionManager, store?: DurableStore) {
     this.connectionManager = connectionManager;
+    this.store = store ?? null;
+  }
+
+  /**
+   * Restore anchor history from durable store.
+   */
+  async restore(): Promise<number> {
+    if (!this.store) return 0;
+    const receipts = await this.store.loadAll(STORE_COLLECTIONS.ANCHOR_RECEIPTS) as AnchorReceipt[];
+    if (receipts.length > 0) {
+      this.anchorHistory = receipts;
+    }
+    console.error(`[ANCHOR] Restored ${receipts.length} anchor receipts`);
+    return receipts.length;
   }
 
   /**
@@ -106,6 +123,11 @@ export class XrplAnchorEngine {
     };
 
     this.anchorHistory.push(receipt);
+
+    // Persist receipt
+    if (this.store) {
+      this.store.append(STORE_COLLECTIONS.ANCHOR_RECEIPTS, [receipt]).catch(() => {});
+    }
 
     console.error(
       `[ANCHOR] Hash anchored: ${submission.dataHash.substring(0, 16)}... → tx:${receipt.txHash.substring(0, 16)}... @ ledger ${receipt.ledgerIndex}`,
