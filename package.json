@@ -15,12 +15,17 @@
     "lint": "turbo lint",
     "type-check": "turbo type-check",
     "clean": "turbo clean",
+    "test:invariants": "npx tsx --test packages/identity/__tests__/invariants.test.ts",
     "control-plane": "turbo dev --filter=sovereign-control-plane"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "eslint": "^10.0.2",
+    "tsx": "^4.21.0",
     "turbo": "^2.4.0",
-    "typescript": "^5.7.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.7.0"
   },
   "engines": {
     "node": ">=20.0.0"

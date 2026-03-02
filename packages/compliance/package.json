@@ -4,6 +4,14 @@
   "description": "Sovereign Compliance — Unified compliance gate (YAML rules + Howey + guardrails)",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

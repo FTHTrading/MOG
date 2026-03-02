@@ -109,3 +109,13 @@ export {
   type SubnameRegistration,
   type ResolvedNamespace,
 } from './namespace';
+
+// Environment — schema + validation
+export {
+  EnvScope,
+  type EnvVar,
+  ENV_SCHEMA,
+  type EnvValidationResult,
+  validateEnvironment,
+  enforceEnvironment,
+} from './env';
