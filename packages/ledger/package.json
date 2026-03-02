@@ -11,7 +11,10 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -19,7 +22,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@sovereign/identity": "*"
+    "@sovereign/identity": "*",
+    "xrpl": "^4.6.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

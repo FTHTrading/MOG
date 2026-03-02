@@ -78,3 +78,13 @@ export {
   type XrplEventSubscription,
   type XrplEvent,
 } from './xrpl/types';
+
+// XRPL Runtime
+export { SovereignXrplConnectionManager } from './xrpl/connection-manager';
+export { XrplAnchorEngine } from './xrpl/anchor-engine';
+
+// Runtime implementations
+export { SovereignAuditLogger } from './runtime/audit-logger';
+export { GuardrailEngine } from './runtime/guardrail-engine';
+export type { GuardrailConfig } from './runtime/guardrail-engine';
+export { SovereignLedgerImpl } from './runtime/sovereign-ledger-impl';
